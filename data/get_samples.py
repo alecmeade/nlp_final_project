@@ -1,3 +1,4 @@
+"""Script to extract a few samples from the larger PlacesAudio dataset and save them to JSON."""
 import os
 import json
 import shutil
