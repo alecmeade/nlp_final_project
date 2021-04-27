@@ -70,6 +70,7 @@ class Speech2Image(pl.LightningModule):
 
                 self.D.zero_grad()
                 return d_loss + (R1 / 2 * r1_loss * D_REG + 0 * real_pred[0])
+            return d_loss
         elif g_step:
             fake_pred = self.D(fake_imgs)
             g_loss = g_nonsaturating_loss(fake_pred)
@@ -83,8 +84,10 @@ class Speech2Image(pl.LightningModule):
                 path_loss, self.mean_path_length, path_lengths = g_path_regularize(fake_img, latents, self.mean_path_length)
                 self.log("PATH", path_loss, on_step=True, on_epoch=True, prog_bar=True)
                 self.log("PATH_L", path_lengths.mean(), on_step=True, on_epoch=True, prog_bar=True)
-                accumulate(self.G_EMA, self.G, ACCUM)
                 return g_loss + (PATH_REGULARIZE * G_REG * path_loss)
+            
+            accumulate(self.G_EMA, self.G, ACCUM)
+            return g_loss
 
 
     def configure_optimizers(self):
