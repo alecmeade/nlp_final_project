@@ -1,0 +1,7 @@
+__pycache__
+.ipynb_checkpoints
+.vscode
+checkpoints_*
+data/PlacesAudioEnglish/
+*.cu
+*.tar.gz
