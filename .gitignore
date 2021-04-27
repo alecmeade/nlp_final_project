@@ -5,3 +5,4 @@ checkpoints_*
 data/PlacesAudioEnglish/
 *.cu
 *.tar.gz
+.DS_Store
