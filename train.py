@@ -31,7 +31,7 @@ def main():
     if args.encoder == "None":
         encoder = None
     else:
-        encoder = prase_encoder(args.encoder)(output_dim=512)
+        encoder = parse_encoder(args.encoder)(output_dim=512)
 
     # Main model
     model = Speech2Image(encoder=encoder)
