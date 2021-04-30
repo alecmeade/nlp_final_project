@@ -24,8 +24,10 @@ ACCUM = 0.5 ** (32 / (10 * 1000))
 
 
 class Speech2Image(pl.LightningModule):
-    def __init__(self, img_size=256, latent=512, n_mlp=8):
+    def __init__(self, encoder=None, img_size=256, latent=512, n_mlp=8):
         super().__init__()
+
+        self.encoder = encoder
 
         self.latent_size = latent
         self.mean_path_length = 0
@@ -38,7 +40,10 @@ class Speech2Image(pl.LightningModule):
         accumulate(self.G_EMA, self.G, 0)
 
     def forward(self, x):
-        z = torch.randn(1, 1, self.latent_size, device=self.device)
+        if self.encoder is None:
+            z = torch.randn(1, 1, self.latent_size, device=self.device)
+        else:
+            z = self.encoder(x)
         return self.G(z)[0]
 
 

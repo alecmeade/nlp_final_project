@@ -67,7 +67,17 @@ class ImageCaptionDataset(Dataset):
 
     def _LoadAudio(self, path):
         audio_type = self.audio_conf.get('audio_type', 'melspectrogram')
-        if audio_type not in ['melspectrogram', 'spectrogram']:
+        if audio_type == 'wav':
+            sample_rate = self.audio_conf.get('sample_rate', 16000)
+            y, sr = librosa.load(path, sample_rate)
+            
+            if len(y.shape) == 1:
+                n_frames = y.shape[0]
+            else:
+                n_frames = y.shape[1]            
+
+            return y, n_frames
+        elif audio_type not in ['melspectrogram', 'spectrogram']:
             raise ValueError('Invalid audio_type specified in audio_conf. Must be one of [melspectrogram, spectrogram]')
         preemph_coef = self.audio_conf.get('preemph_coef', 0.97)
         sample_rate = self.audio_conf.get('sample_rate', 16000)

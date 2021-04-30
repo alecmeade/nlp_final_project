@@ -4,8 +4,8 @@ import torch
 from pytorch_lightning import Trainer, loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 from speech2image.model import Speech2Image
+from speech2image.encoder import parse_encoder, supported_encoders
 from dataloaders.image_caption_dataset import ImageCaptionDataset
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size.")
     parser.add_argument("--dataset", type=str, default="./data/PlacesAudioEnglish", help="Dataset path.")
     parser.add_argument("--niter", type=int, default=100, help="Number of training iters.")
+    parser.add_argument("--encoder", type=str, default="crdnn", choices=supported_encoders + ["None"], help="Name of audio encoder to use")
     parser.add_argument("--version", type=str, default=None, help="Experiment version.")
     args = parser.parse_args()
 
@@ -26,8 +27,14 @@ def main():
     train_set = ImageCaptionDataset(os.path.join(args.dataset, "samples.json"))
     train_dl = torch.utils.data.DataLoader(train_set, shuffle=True, num_workers=8, pin_memory=cuda, batch_size=args.batch_size)
 
+    # Encoder model
+    if args.encoder == "None":
+        encoder = None
+    else:
+        encoder = prase_encoder(args.encoder)(output_dim=512)
+
     # Main model
-    model = Speech2Image()
+    model = Speech2Image(encoder=encoder)
     
     # Model training
     logger = loggers.WandbLogger(args.version, args.checkpoints_dir)
