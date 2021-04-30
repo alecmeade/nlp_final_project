@@ -2,7 +2,7 @@ import math
 import random
 import torch
 from torch import nn
-
+from speechbrain.lobes.models.transformer.conformer import ConformerEncoder
 from .layers import *
 
 
@@ -247,3 +247,16 @@ class Discriminator(nn.Module):
         out = self.final_linear(out)
 
         return out
+
+
+class Encoder(nn.Module):
+    def __init__(self, n_mels=40, latent_dim=512):
+        super().__init__()
+        self.enc = ConformerEncoder(1, 8, latent_dim, d_model=n_mels)
+        self.linear = nn.Linear(n_mels, latent_dim)
+
+    def forward(self, input, lens):
+        x = input.permute(0, 2, 1)
+        masks = torch.arange(x.shape[1], device=x.device)[None, :] < lens[:, None]
+        x = self.enc(x, src_key_padding_mask=masks)[0]
+        return self.linear(F.relu(x.mean(dim=1)))

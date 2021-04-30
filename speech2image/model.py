@@ -4,7 +4,7 @@ from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import wandb
-from .networks import Generator, Discriminator
+from .networks import Encoder, Generator, Discriminator
 from .util import *
 
 
@@ -24,27 +24,24 @@ ACCUM = 0.5 ** (32 / (10 * 1000))
 
 
 class Speech2Image(pl.LightningModule):
-    def __init__(self, encoder=None, img_size=256, latent=512, n_mlp=8):
+    def __init__(self, img_size=256, latent=512, n_mlp=8):
         super().__init__()
-
-        self.encoder = encoder
 
         self.latent_size = latent
         self.mean_path_length = 0
         self._init_networks(img_size, self.latent_size, n_mlp)
 
     def _init_networks(self, img_size, latent, n_mlp):
+        self.enc = Encoder(latent_dim=latent)
+        self.enc.enc.train()
         self.G = Generator(img_size, latent, n_mlp, channel_multiplier=CHANNEL_MULTIPLIER)
         self.D = Discriminator(img_size, channel_multiplier=CHANNEL_MULTIPLIER)
         self.G_EMA = Generator(img_size, latent, n_mlp, channel_multiplier=CHANNEL_MULTIPLIER)
         accumulate(self.G_EMA, self.G, 0)
 
-    def forward(self, x):
-        if self.encoder is None:
-            z = torch.randn(1, 1, self.latent_size, device=self.device)
-        else:
-            z = self.encoder(x)
-        return self.G(z)[0]
+    def forward(self, x=None, nframes=None):
+        z = self.enc(x, nframes).unsqueeze(0) if self.enc is not None else torch.randn(1, 1, self.latent_size, device=self.device)
+        return self.G_EMA(z)[0]
 
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -55,7 +52,7 @@ class Speech2Image(pl.LightningModule):
         d_step = optimizer_idx == 1
 
         # Generate image
-        z = torch.randn(1, images.shape[0], self.latent_size, device=self.device)
+        z = self.enc(audio, nframes).unsqueeze(0) if self.enc is not None else torch.randn(1, images.shape[0], self.latent_size, device=self.device)
         fake_imgs, _ = self.G(z)
         fake_pred = self.D(fake_imgs)
         real_pred = self.D(images)
@@ -96,7 +93,7 @@ class Speech2Image(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        self.g_optim = optim.Adam(self.G.parameters(), lr=G_LR, betas=ADAM_BETAG)
+        self.g_optim = optim.Adam(list(self.G.parameters()) + list(self.enc.parameters()), lr=G_LR, betas=ADAM_BETAG)
         self.d_optim = optim.Adam(self.D.parameters(), lr=D_LR, betas=ADAM_BETAD)
         return [self.g_optim, self.d_optim], []
         
