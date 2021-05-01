@@ -189,7 +189,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1]):
+    def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], latent_dim=512):
         super().__init__()
 
         channels = {
@@ -223,12 +223,13 @@ class Discriminator(nn.Module):
         self.stddev_feat = 1
 
         self.final_conv = ConvLayer(in_channel + 1, channels[4], 3)
+        self.concat = nn.Linear((channels[4] * 4 * 4) + latent_dim, channels[4] * 4 * 4)
         self.final_linear = nn.Sequential(
             EqualLinear(channels[4] * 4 * 4, channels[4], activation="fused_lrelu"),
             EqualLinear(channels[4], 1),
         )
 
-    def forward(self, input):
+    def forward(self, input, label=None):
         out = self.convs(input)
 
         batch, channel, height, width = out.shape
@@ -244,6 +245,8 @@ class Discriminator(nn.Module):
         out = self.final_conv(out)
 
         out = out.view(batch, -1)
+        if label is not None:
+            out = self.concat(torch.cat([out, label[0]], dim=1))
         out = self.final_linear(out)
 
         return out
@@ -252,7 +255,7 @@ class Discriminator(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, n_mels=40, latent_dim=512):
         super().__init__()
-        self.enc = ConformerEncoder(1, 8, latent_dim, d_model=n_mels)
+        self.enc = ConformerEncoder(num_layers=8, nhead=4, d_ffn=2048, d_model=n_mels)
         self.linear = nn.Linear(n_mels, latent_dim)
 
     def forward(self, input, lens):

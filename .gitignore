@@ -5,6 +5,6 @@ checkpoints_*
 data/Places*
 data/*.json
 data/*.sh
-*.tar.gz
+*.tar.gz*
 nohup*.out
 .DS_Store
