@@ -54,10 +54,10 @@ class Speech2Image(pl.LightningModule):
         # Generate image
         z = self.enc(audio, nframes).unsqueeze(0) if self.enc is not None else torch.randn(1, images.shape[0], self.latent_size, device=self.device)
         fake_imgs, _ = self.G(z)
-        fake_pred = self.D(fake_imgs)
-        real_pred = self.D(images)
-
-        self.logger.experiment.log({"G_IMG": [wandb.Image(fake_imgs[0].cpu(), caption="G_IMG")]}, commit=False)
+        fake_pred = self.D(fake_imgs, z)
+        real_pred = self.D(images, z)
+        
+        self.logger.experiment.log({"G_IMG": [wandb.Image(fake_imgs[0].cpu(), caption="G_IMG"), wandb.Image(images[0].cpu(), caption="R_IMG")]}, commit=False)
 
         if d_step:
             d_loss = d_logistic_loss(real_pred, fake_pred)
