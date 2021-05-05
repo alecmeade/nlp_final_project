@@ -26,10 +26,10 @@ class ESPnetEncoder(torch.nn.Module):
             speech = torch.tensor(speech)
 
         # data: (Nsamples,) -> (1, Nsamples)
-        speech = speech.unsqueeze(0).to(self.dtype)
+        # speech = speech.unsqueeze(0).to(self.dtype)
         speech = speech.to(self.dtype)
         
-        lengths = speech.new_full([1], dtype=torch.long, fill_value=speech.size(1))
+        lengths = speech.new_full([speech.shape[0]], dtype=torch.long, fill_value=speech.size(1))
         batch = {"speech": speech, "speech_lengths": lengths}
         
         # to device

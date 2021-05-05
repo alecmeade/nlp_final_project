@@ -23,7 +23,7 @@ def preemphasis(signal,coeff=0.97):
     return np.append(signal[0],signal[1:]-coeff*signal[:-1])
 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, dataset_json_file, audio_conf=None, image_conf=None):
+    def __init__(self, dataset_json_file, audio_conf=None, image_conf=None, img_size=256):
         """
         Dataset that manages a set of paired images and audio recordings
         :param dataset_json_file
@@ -47,12 +47,12 @@ class ImageCaptionDataset(Dataset):
         else:
             self.image_conf = image_conf
 
-        crop_size = self.image_conf.get('crop_size', 256)
+        crop_size = self.image_conf.get('crop_size', img_size)
         center_crop = self.image_conf.get('center_crop', False)
 
         if center_crop:
             self.image_resize_and_crop = transforms.Compose(
-                [transforms.Resize(256), transforms.CenterCrop(256), transforms.ToTensor()])
+                [transforms.Resize(img_size), transforms.CenterCrop(img_size), transforms.ToTensor()])
         else:
             self.image_resize_and_crop = transforms.Compose(
                 [transforms.RandomResizedCrop(crop_size), transforms.ToTensor()])
@@ -77,7 +77,7 @@ class ImageCaptionDataset(Dataset):
                 n_frames = y.shape[1]            
 
             return y, n_frames
-        elif audio_type not in ['melspectrogram', 'spectrogram']:
+        elif audio_type not in ["melspectrogram", "spectrogram", "audio"]:
             raise ValueError('Invalid audio_type specified in audio_conf. Must be one of [melspectrogram, spectrogram]')
         preemph_coef = self.audio_conf.get('preemph_coef', 0.97)
         sample_rate = self.audio_conf.get('sample_rate', 16000)
@@ -110,7 +110,13 @@ class ImageCaptionDataset(Dataset):
             logspec = librosa.power_to_db(melspec, ref=np.max)
         elif audio_type == 'spectrogram':
             logspec = librosa.power_to_db(spec, ref=np.max)
-        n_frames = logspec.shape[1]
+        else:
+            length = sample_rate * 15
+            logspec = y[:length]
+            if len(logspec) < (length):
+                logspec = np.concatenate((logspec, np.ones(length - len(y)) * padval))
+            use_raw_length = True
+        n_frames = logspec.shape[1] if len(logspec.shape) > 1 else logspec.shape[0]
         if use_raw_length:
             target_length = n_frames
         p = target_length - n_frames
@@ -126,7 +132,7 @@ class ImageCaptionDataset(Dataset):
     def _LoadImage(self, impath):
         img = Image.open(impath).convert('RGB')
         img = self.image_resize_and_crop(img)
-        img = self.image_normalize(img)
+        # img = self.image_normalize(img)
         return img
 
     def __getitem__(self, index):
@@ -141,7 +147,7 @@ class ImageCaptionDataset(Dataset):
         imgpath = os.path.join(self.image_base_path, datum['image'])
         audio, nframes = self._LoadAudio(wavpath)
         image = self._LoadImage(imgpath)
-        return image, audio, nframes
+        return image, audio, nframes, wavpath
 
     def __len__(self):
         return len(self.data)
