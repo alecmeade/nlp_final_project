@@ -57,7 +57,7 @@ class Speech2Image(pl.LightningModule):
         x = self.enc(x)
         # _, l, _ = self.vq(x.permute(0, 2, 1))
         # z = l.float().view(1, 1, -1)
-        z = x.mean(dim=1).view(1, 1, -1)
+        z = x.mean(dim=1).view(1, x.shape[0], -1)
         return self.G_EMA(z, input_is_latent=True, randomize_noise=False)[0]
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -85,8 +85,8 @@ class Speech2Image(pl.LightningModule):
 
         fake_imgs.requires_grad_(True)
         
-        self.logger.experiment.log({"G_IMG": [wandb.Image(self.forward(audio[0].unsqueeze(0), nframes[0].unsqueeze(0)).cpu(), caption="G_IMG"), wandb.Image(images[0].cpu(), caption="R_IMG")]}, commit=False)
-        self.logger.experiment.log({"G_AUD": [wandb.Audio(apath[0], caption="Audio")]}, commit=False)
+        # self.logger.experiment.log({"G_IMG": [wandb.Image(self.forward(audio[0].unsqueeze(0), nframes[0].unsqueeze(0)).cpu(), caption="G_IMG"), wandb.Image(images[0].cpu(), caption="R_IMG")]}, commit=False)
+        # self.logger.experiment.log({"G_AUD": [wandb.Audio(apath[0], caption="Audio")]}, commit=False)
 
         if d_step:
             d_loss = d_logistic_loss(real_pred, fake_pred)
@@ -127,12 +127,25 @@ class Speech2Image(pl.LightningModule):
         
     
     def validation_step(self, batch, batch_idx):
-        pass
+        images, audio, nframes, apath = batch
+        fake_imgs = self.forward(audio, nframes).cpu()
+        return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
         
     
     def validation_epoch_end(self, outputs):
-        pass
+        if not len(outputs):
+            return
+        f_imgs = []
+        r_imgs = []
+        i_auds = []
+        for output in outputs:
+            f_imgs += [wandb.Image(x, caption="G_IMG %d" % i) for i, x in enumerate(output["G_IMGs"])]
+            r_imgs += [wandb.Image(x, caption="R_IMG %d" % i) for i, x in enumerate(output["R_IMGs"])]
+            i_auds += [wandb.Audio(x, caption="I_AUD %d" % i) for i, x in enumerate(output["I_AUDs"])]
         
+        self.logger.experiment.log({"G_IMG Val": f_imgs}, commit=False)
+        self.logger.experiment.log({"R_IMG Val": r_imgs}, commit=False)
+        self.logger.experiment.log({"I_AUD Val": i_auds}, commit=False)
 
     def test_step(self, batch, batch_idx):
         pass
