@@ -33,7 +33,9 @@ class Speech2Image(pl.LightningModule):
         self.D = SimplestDiscriminator()
 
     def forward(self, x=None, nframes=None):
-        z = torch.cat([self.enc(x, nframes), torch.randn(1, self.latent_size//2, device=self.device)], dim=-1) if self.enc is not None else torch.randn(1, self.latent_size, device=self.device)
+        x = self.enc(x)
+        z = x.mean(dim=1)
+        # z = torch.cat([self.enc(x, nframes), torch.randn(1, self.latent_size//2, device=self.device)], dim=-1) if self.enc is not None else torch.randn(1, self.latent_size, device=self.device)
         return self.G(z)
 
 
@@ -80,11 +82,25 @@ class Speech2Image(pl.LightningModule):
         
     
     def validation_step(self, batch, batch_idx):
-        pass
+        images, audio, nframes, apath = batch
+        fake_imgs = self.forward(audio, nframes).cpu()
+        return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
         
     
     def validation_epoch_end(self, outputs):
-        pass
+        if not len(outputs):
+            return
+        f_imgs = []
+        r_imgs = []
+        i_auds = []
+        for output in outputs:
+            f_imgs += [wandb.Image(x, caption="G_IMG %d" % i) for i, x in enumerate(output["G_IMGs"])]
+            r_imgs += [wandb.Image(x, caption="R_IMG %d" % i) for i, x in enumerate(output["R_IMGs"])]
+            i_auds += [wandb.Audio(x, caption="I_AUD %d" % i) for i, x in enumerate(output["I_AUDs"])]
+        
+        self.logger.experiment.log({"G_IMG Val": f_imgs}, commit=False)
+        self.logger.experiment.log({"R_IMG Val": r_imgs}, commit=False)
+        self.logger.experiment.log({"I_AUD Val": i_auds}, commit=False)
         
 
     def test_step(self, batch, batch_idx):
