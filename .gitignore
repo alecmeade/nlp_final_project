@@ -5,8 +5,17 @@ checkpoints_*
 data/Places*
 data/*.json
 data/*.sh
+data/*/
+*.pkl
+*.yaml
 *.tar.gz*
 nohup*.out
 .DS_Store
 *.pth
 eval_scorers/trained_models/
+*.pt
+wandb/
+exp/
+data/places*
+tmp*/
+*.json

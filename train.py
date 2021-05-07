@@ -51,7 +51,7 @@ def main():
     )
     
     trainer = Trainer(
-        gpus=[5],
+        gpus=args.n_gpus if cuda else None,
         auto_select_gpus=True,
         limit_val_batches=4,
         accelerator="ddp" if cuda else None,
