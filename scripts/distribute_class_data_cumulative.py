@@ -1,5 +1,6 @@
 import os
 import argparse
+import copy
 import json
 
 def main():
@@ -38,13 +39,13 @@ def main():
     outd = {}
     for x in d["data"]:
         cn = get_classname(x)
-        outd.setdefault(cn, paths.copy())
+        outd.setdefault(cn, copy.deepcopy(paths))
         outd[cn]["data"].append(x)
     
     # Write files
     for k, v in outd.items():
         fn = os.path.join(args.outdir, "%s.json" % k)
-        print("Writing %s." % fn)
+        print("Writing %s: %d images." % (fn, len(v["data"])))
         with open(fn, "w") as json_file:
             json.dump(v, json_file, indent=4)
 
