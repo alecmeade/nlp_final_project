@@ -42,6 +42,7 @@ def main():
         dirpath=os.path.join(args.checkpoints_dir, args.version),
         filename="speech2image_simplest{epoch:04d}",
         # period=10,
+        every_n_val_epochs=1,
         save_top_k=-1,
         verbose=True,
         save_last=True
@@ -50,6 +51,7 @@ def main():
     trainer = Trainer(
         gpus=args.n_gpus if cuda else None,
         auto_select_gpus=True,
+        limit_val_batches=4,
         accelerator="ddp" if cuda else None,
         max_epochs=args.niter,
         default_root_dir=args.checkpoints_dir,

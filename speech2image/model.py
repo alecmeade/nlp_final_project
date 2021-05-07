@@ -58,7 +58,8 @@ class Speech2Image(pl.LightningModule):
         # _, l, _ = self.vq(x.permute(0, 2, 1))
         # z = l.float().view(1, 1, -1)
         z = x.mean(dim=1).view(1, x.shape[0], -1)
-        return self.G_EMA(z, input_is_latent=True, randomize_noise=False)[0]
+        z = torch.cat([z, torch.randn(1, x.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
+        return self.G_EMA(z, randomize_noise=False)[0]
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         if self.s_flag:
@@ -78,8 +79,9 @@ class Speech2Image(pl.LightningModule):
         # _, l, _ = self.vq(x.permute(0, 2, 1))
         # z = l.float().view(1, audio.shape[0], -1)
         z = x.mean(dim=1).view(1, audio.shape[0], -1)
+        z = torch.cat([z, torch.randn(1, audio.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
         # z = torch.cat([self.enc(audio, nframes).unsqueeze(0), torch.randn(1, images.shape[0], self.latent_size//2, device=self.device)], dim=-1) if self.enc is not None else torch.randn(1, images.shape[0], self.latent_size, device=self.device)
-        fake_imgs, _ = self.G(z, input_is_latent=True, randomize_noise=False)
+        fake_imgs, _ = self.G(z, randomize_noise=False)
         fake_pred = self.D(fake_imgs, z)
         real_pred = self.D(images, z)
 
