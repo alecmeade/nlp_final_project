@@ -44,15 +44,16 @@ def main():
         dirpath=dirpath,
         filename="speech2image_{epoch:04d}",
         # period=10,
+        every_n_val_epochs=1,
         save_top_k=-1,
-        verbose=True,
-        save_last=True
+        verbose=True
+        # save_last=True
     )
     
     trainer = Trainer(
-        gpus=args.n_gpus if cuda else None,
+        gpus=[5],
         auto_select_gpus=True,
-        # accumulate_grad_batches=4,
+        limit_val_batches=4,
         accelerator="ddp" if cuda else None,
         max_epochs=args.niter,
         default_root_dir=args.checkpoints_dir,
