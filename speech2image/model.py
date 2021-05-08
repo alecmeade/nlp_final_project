@@ -120,19 +120,16 @@ class Speech2Image(pl.LightningModule):
                 return g_loss + (PATH_REGULARIZE * G_REG * path_loss)
             return g_loss
 
-
     def configure_optimizers(self):
         self.g_optim = optim.Adam(self.G.parameters(), lr=G_LR, betas=ADAM_BETAG)
         self.d_optim = optim.Adam(self.D.parameters(), lr=D_LR, betas=ADAM_BETAD)
         self.enc_optim = optim.Adam(self.enc.parameters(), lr=ENC_LR, betas=ADAM_BETAG)
         return [self.g_optim, self.d_optim, self.enc_optim], []
-        
     
     def validation_step(self, batch, batch_idx):
         images, audio, nframes, apath = batch
         fake_imgs = self.forward(audio, nframes).cpu()
         return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
-        
     
     def validation_epoch_end(self, outputs):
         if not len(outputs):
@@ -150,8 +147,9 @@ class Speech2Image(pl.LightningModule):
         self.logger.experiment.log({"I_AUD Val": i_auds}, commit=False)
 
     def test_step(self, batch, batch_idx):
-        pass
+        images, audio, nframes, apath = batch
+        fake_imgs = self.forward(audio, nframes).cpu()
+        return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
         
-    
     def test_epoch_end(self, outputs):
-        pass
+        return outputs
