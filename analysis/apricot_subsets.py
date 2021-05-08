@@ -8,6 +8,8 @@ from sklearn.manifold import TSNE
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import MinMaxScaler
 
 
 def read_partition(path):
@@ -17,11 +19,14 @@ def read_partition(path):
 
 	return data
 
+
 if __name__ == "__main__":
 	paritions = ["train_2020.json", "test_seen_2020.json", "test_unseen_2020.json"]
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--partition", type=int, default=0)
 	parser.add_argument("--coreset_frac", type=float, default=0.1)
+	parser.add_argument("--use_lsa", type=bool, default=True)
+	parser.add_argument("--rep_size", type=int, default=100)
 	parser.add_argument("--display_tsne", type=bool, default=True)
 	parser.add_argument("--tsne_frac", type=float, default=0.01)
 	args = parser.parse_args()
@@ -50,6 +55,12 @@ if __name__ == "__main__":
 	pipe = Pipeline([('count', CountVectorizer(vocabulary=vocabulary)),
 		('tfid', TfidfTransformer())]).fit(corpus)
 	X = pipe.transform(corpus)
+	if args.use_lsa:
+		svd = TruncatedSVD(n_components=args.rep_size)
+		X = svd.fit_transform(X)
+		scaler = MinMaxScaler()
+		X = scaler.fit_transform(X)
+		
 	print("TFIDF Converted.")
 
 
