@@ -19,3 +19,5 @@ exp/
 data/places*
 tmp*/
 *.json
+lightning_logs/
+output*/
