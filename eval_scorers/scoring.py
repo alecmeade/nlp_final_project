@@ -68,6 +68,7 @@ class DaveNetScorer():
         _, img_output_H, img_output_W = image_dim
         heatmap = torch.mm(audio_output.t(), image_output).squeeze()
         heatmap = heatmap.view(audio_output.size(1), img_output_H, img_output_W).numpy()#.max(dim=0)[0].numpy()
+        print(heatmap)
         matches = np.where(heatmap >= self.matchmap_thresh, 0, 1)
         N_t = audio_output.size(1)
         N_r = img_output_H
@@ -109,6 +110,7 @@ def main():
     for img, audio, n_frames in loader:
         heatmap, matches, sisa, misa, sima  = dave_scorer.score(audio, img)
         clf_score = clf_scorer.score(img.unsqueeze(0))
+        print(clf_score.shape)
         print("SISA", sisa)
         print("MISA", misa)
         print("SIMA", sima)
