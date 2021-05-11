@@ -18,7 +18,7 @@ from googlenet_places205 import GoogLeNetPlaces205
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 
 
-GOOGLENET_PLACES205_PATH = 'eval_scorers/googlenet_places205.pth' 
+GOOGLENET_PLACES205_PATH = 'eval_scorers/trained_models/googlenet_places205/googlenet_places205.pth' 
 DAVENET_MODEL_PATH = 'eval_scorers/trained_models/davenet_vgg16_MISA_1024_pretrained/'
 AUDIO_MODEL_PATH = os.path.join(DAVENET_MODEL_PATH, 'audio_model.pth')
 IMAGE_MODEL_PATH = os.path.join(DAVENET_MODEL_PATH, 'image_model.pth')
