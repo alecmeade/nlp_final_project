@@ -1,3 +1,4 @@
+# Borrowed from https://github.com/ProGamerGov/pytorch-places
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

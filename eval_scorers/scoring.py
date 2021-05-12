@@ -1,3 +1,5 @@
+# Some DaveNet scoring code is borrowed from from https://github.com/iapalm/davenet_demo/tree/main/models
+
 import math
 import sys
 import time
@@ -15,9 +17,11 @@ import tarfile
 
 from PIL import Image
 from googlenet_places205 import GoogLeNetPlaces205
+from googlenet_places205_caffe import GoogleNetPlaces205Caffe
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 
 
+CAFFE_GOOGLENET_PLACES205_PATH = "eval_scorers/trained_models/googlenet_places205/2755ce3d87254759a25cd82e3ca86c4a.npy"
 GOOGLENET_PLACES205_PATH = 'eval_scorers/trained_models/googlenet_places205/googlenet_places205.pth' 
 DAVENET_MODEL_PATH = 'eval_scorers/trained_models/davenet_vgg16_MISA_1024_pretrained/'
 AUDIO_MODEL_PATH = os.path.join(DAVENET_MODEL_PATH, 'audio_model.pth')
@@ -80,13 +84,15 @@ class DaveNetScorer():
 
 
 class ClassifierScorer():
-    def __init__(self, model_path, model_type = "GoogLeNetPlaces205"):
+    def __init__(self, model_type = "GoogleNetPlaces205Caffe"):
         self.model = None
 
         if model_type == "GoogLeNetPlaces205":
             self.model = GoogLeNetPlaces205()
-            self.model.load_state_dict(torch.load(model_path))
-            
+            self.model.load_state_dict(torch.load(CAFFE_GOOGLENET_PLACES205_PATH))
+        elif model_type == "GoogleNetPlaces205Caffe":
+            self.model = GoogleNetPlaces205Caffe(CAFFE_GOOGLENET_PLACES205_PATH)
+  
         self.model.eval()
 
 
@@ -99,7 +105,7 @@ class ClassifierScorer():
 
 def main():
     dave_scorer = DaveNetScorer(AUDIO_MODEL_PATH, IMAGE_MODEL_PATH)
-    clf_scorer = ClassifierScorer(GOOGLENET_PLACES205_PATH)
+    clf_scorer = ClassifierScorer()
 
     if os.path.isfile(TAR_FILE_PATH):
           tar = tarfile.open(TAR_FILE_PATH, "r:gz")
@@ -119,12 +125,13 @@ def main():
         heatmap, matches, sisa, misa, sima  = dave_scorer.score(audio, img)
         lnet_img = lnet_img_transform(img)
         clf_score = clf_scorer.score(lnet_img.unsqueeze(0))
+        print(torch.argmax(clf_score))
         prev_audio = audio
         fig, ax = plt.subplots(1, 2, figsize=(25, 5), gridspec_kw={'width_ratios': [1, 3]})
         ax[0].imshow(img.permute(1, 2, 0))
         ax[1].imshow(audio, aspect='auto')
         plt.show()
-        
+
 
 if __name__ == "__main__":
     main()
