@@ -21,3 +21,6 @@ tmp*/
 *.json
 lightning_logs/
 output*/
+*.png
+*.webm
+*.wav
