@@ -14,6 +14,7 @@ import torchvision.transforms as transforms
 import dave_models
 import matplotlib.pyplot as plt
 import tarfile
+import torchvision
 import pandas as pd
 
 from PIL import Image
@@ -22,6 +23,7 @@ from googlenet_places205_caffe import GoogleNetPlaces205Caffe
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 
 CLASSES_205_PATH = "eval_scorers/trained_models/googlenet_places205/categoryindex_places205.csv"
+NIKHIL_CAFFE_GOOGLENET_PLACES205_PATH = "eval_scorers/trained_models/googlenet_places205/snapshot_iter_765280.caffemodel.pt"
 CAFFE_GOOGLENET_PLACES205_PATH = "eval_scorers/trained_models/googlenet_places205/2755ce3d87254759a25cd82e3ca86c4a.npy"
 GOOGLENET_PLACES205_PATH = 'eval_scorers/trained_models/googlenet_places205/googlenet_places205.pth' 
 DAVENET_MODEL_PATH = 'eval_scorers/trained_models/davenet_vgg16_MISA_1024_pretrained/'
@@ -85,17 +87,42 @@ class DaveNetScorer():
 
 
 class ClassifierScorer():
-    def __init__(self, model_type = "GoogleNetPlaces205Caffe"):
+    def __init__(self, model_type = "GoogleNetPlaces205CaffeNikhil"):
         self.model = None
 
         if model_type == "GoogLeNetPlaces205":
             self.model = GoogLeNetPlaces205()
             self.model.load_state_dict(torch.load(CAFFE_GOOGLENET_PLACES205_PATH))
+
         elif model_type == "GoogleNetPlaces205Caffe":
             self.model = GoogleNetPlaces205Caffe(CAFFE_GOOGLENET_PLACES205_PATH)
-  
+
+        elif model_type == "GoogleNetPlaces205CaffeNikhil":
+            layer_map = {"conv1_1": "features.0",
+                         "conv1_2": "features.2", 
+                         "conv2_1": "features.5", 
+                         "conv2_2": "features.7",
+                         "conv3_1": "features.10",
+                         "conv3_2": "features.12", 
+                         "conv3_3": "features.14",
+                         "conv4_1": "features.17", 
+                         "conv4_2": "features.19", 
+                         "conv4_3": "features.21",
+                         "conv5_1": "features.24", 
+                         "conv5_2": "features.26", 
+                         "conv5_3": "features.28", 
+                         "fc6": "classifier.0",
+                         "fc7": "classifier.3", 
+                         "fc8": "classifier.6"}
+            self.model = torchvision.models.vgg16(num_classes=205)
+            s = torch.load(NIKHIL_CAFFE_GOOGLENET_PLACES205_PATH)
+            self.model.load_state_dict({self.replace(kn, layer_map):v for kn, v in s.items()})   
+
         self.model.eval()
 
+    def replace(self, key, mapping):
+        k = key[:key.rfind(".")]
+        return key.replace(k, mapping[k])
 
     def score(self, img):
         if self.model is None:
