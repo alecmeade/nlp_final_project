@@ -14,13 +14,14 @@ import torchvision.transforms as transforms
 import dave_models
 import matplotlib.pyplot as plt
 import tarfile
+import pandas as pd
 
 from PIL import Image
 from googlenet_places205 import GoogLeNetPlaces205
 from googlenet_places205_caffe import GoogleNetPlaces205Caffe
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 
-
+CLASSES_205_PATH = "eval_scorers/trained_models/googlenet_places205/categoryindex_places205.csv"
 CAFFE_GOOGLENET_PLACES205_PATH = "eval_scorers/trained_models/googlenet_places205/2755ce3d87254759a25cd82e3ca86c4a.npy"
 GOOGLENET_PLACES205_PATH = 'eval_scorers/trained_models/googlenet_places205/googlenet_places205.pth' 
 DAVENET_MODEL_PATH = 'eval_scorers/trained_models/davenet_vgg16_MISA_1024_pretrained/'
@@ -114,18 +115,25 @@ def main():
     audio_conf = {
         'use_raw_length': True
     }
-    loader = ImageCaptionDataset(os.path.join(DATASET_BASE_PATH, "samples.json"), audio_conf = audio_conf)
+    loader = ImageCaptionDataset(os.path.join(DATASET_BASE_PATH, "samples.json"),
+        audio_conf = audio_conf)
 
     lnet_img_transform = transforms.Compose([
             transforms.Resize(224)
         ])
+
+    class_205 = pd.read_csv(CLASSES_205_PATH, header = None)
+
+    def get_class(uid):
+        return class_205.iloc[uid][0].split(' ')[0].split('/')[-1]
+
 
     prev_audio = None
     for img, audio, n_frames in loader:
         heatmap, matches, sisa, misa, sima  = dave_scorer.score(audio, img)
         lnet_img = lnet_img_transform(img)
         clf_score = clf_scorer.score(lnet_img.unsqueeze(0))
-        print(torch.argmax(clf_score))
+        print("Pred Class: ", get_class(torch.argmax(clf_score).numpy()))
         prev_audio = audio
         fig, ax = plt.subplots(1, 2, figsize=(25, 5), gridspec_kw={'width_ratios': [1, 3]})
         ax[0].imshow(img.permute(1, 2, 0))
