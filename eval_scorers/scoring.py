@@ -68,7 +68,7 @@ class DaveNetScorer():
         _, img_output_H, img_output_W = image_dim
         heatmap = torch.mm(audio_output.t(), image_output).squeeze()
         heatmap = heatmap.view(audio_output.size(1), img_output_H, img_output_W).numpy()#.max(dim=0)[0].numpy()
-        print(heatmap)
+
         matches = np.where(heatmap >= self.matchmap_thresh, 0, 1)
         N_t = audio_output.size(1)
         N_r = img_output_H
@@ -105,16 +105,21 @@ def main():
           tar = tarfile.open(TAR_FILE_PATH, "r:gz")
           tar.extractall(path=TEST_DATA_DIR)
 
-    loader = ImageCaptionDataset(os.path.join(DATASET_BASE_PATH, "samples.json"))
+    audio_conf = {
+        'use_raw_length': True
+    }
+    loader = ImageCaptionDataset(os.path.join(DATASET_BASE_PATH, "samples.json"), audio_conf = audio_conf)
 
+    lnet_img_transform = transforms.Compose([
+            transforms.Resize(224)
+        ])
+
+    prev_audio = None
     for img, audio, n_frames in loader:
         heatmap, matches, sisa, misa, sima  = dave_scorer.score(audio, img)
-        clf_score = clf_scorer.score(img.unsqueeze(0))
-        print(clf_score.shape)
-        print("SISA", sisa)
-        print("MISA", misa)
-        print("SIMA", sima)
-        print("CLF", clf_score)
+        lnet_img = lnet_img_transform(img)
+        clf_score = clf_scorer.score(lnet_img.unsqueeze(0))
+        prev_audio = audio
         fig, ax = plt.subplots(1, 2, figsize=(25, 5), gridspec_kw={'width_ratios': [1, 3]})
         ax[0].imshow(img.permute(1, 2, 0))
         ax[1].imshow(audio, aspect='auto')
