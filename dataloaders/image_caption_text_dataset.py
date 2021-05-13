@@ -15,7 +15,7 @@ import torchvision.transforms as transforms
 
 
 class ImageCaptionTextDataset(Dataset):
-    def __init__(self, dataset_json_file, image_conf=None, img_size=256):
+    def __init__(self, dataset_json_file, image_conf=None, img_size=256, normalize=False):
         """
         Dataset that manages a set of paired images and audio recordings
         :param dataset_json_file
@@ -27,6 +27,8 @@ class ImageCaptionTextDataset(Dataset):
             data_json = json.load(fp)
         self.data = data_json['data']
         self.image_base_path = data_json['image_base_path']
+
+        self.normalize = normalize
 
         if not image_conf:
             self.image_conf = {}
@@ -53,7 +55,8 @@ class ImageCaptionTextDataset(Dataset):
     def _LoadImage(self, impath):
         img = Image.open(impath).convert('RGB')
         img = self.image_resize_and_crop(img)
-        # img = self.image_normalize(img)
+        if self.normalize:
+            img = self.image_normalize(img)
         return img
 
     def __getitem__(self, index):

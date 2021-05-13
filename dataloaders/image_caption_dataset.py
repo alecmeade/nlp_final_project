@@ -23,7 +23,7 @@ def preemphasis(signal,coeff=0.97):
     return np.append(signal[0],signal[1:]-coeff*signal[:-1])
 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, dataset_json_file, audio_conf=None, image_conf=None, img_size=256):
+    def __init__(self, dataset_json_file, audio_conf=None, image_conf=None, img_size=256, normalize=False):
         """
         Dataset that manages a set of paired images and audio recordings
         :param dataset_json_file
@@ -36,6 +36,8 @@ class ImageCaptionDataset(Dataset):
         self.data = data_json['data']
         self.image_base_path = data_json['image_base_path']
         self.audio_base_path = data_json['audio_base_path']
+        
+        self.normalize = normalize
 
         if not audio_conf:
             self.audio_conf = {}
@@ -132,7 +134,8 @@ class ImageCaptionDataset(Dataset):
     def _LoadImage(self, impath):
         img = Image.open(impath).convert('RGB')
         img = self.image_resize_and_crop(img)
-        # img = self.image_normalize(img)
+        if self.normalize:
+            img = self.image_normalize(img)
         return img
 
     def __getitem__(self, index):

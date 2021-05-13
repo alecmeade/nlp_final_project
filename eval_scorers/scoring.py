@@ -61,12 +61,14 @@ def main():
     
     # Dataset
     audio_conf = {"use_raw_length": True}
-    dataset = ImageCaptionDataset(args.dataset, audio_conf=audio_conf)
+    dataset = ImageCaptionDataset(args.dataset, audio_conf=audio_conf, normalize=True)
     data_key = {x["wav"]:x for x in dataset.data}
-    loader = torch.utils.data.DataLoader(dataset, shuffle=True, num_workers=8, pin_memory=args.device == "cuda", batch_size=1)
+    loader = torch.utils.data.DataLoader(dataset, num_workers=8, pin_memory=args.device == "cuda", batch_size=1)
 
     # Other
-    lnet_img_transform = transforms.Compose([transforms.Resize(224)])
+    RGB_mean = [0.485, 0.456, 0.406]
+    RGB_std = [0.229, 0.224, 0.225]
+    lnet_img_transform = transforms.Compose([transforms.Resize(224), transforms.Normalize(mean=RGB_mean, std=RGB_std)])
 
     c205_c2n = {}
     c205_n2c = {}
