@@ -16,7 +16,7 @@ class ClassifierScorer():
             self.model.load_state_dict(torch.load(model_path))
         elif model_type == "googlenetcaffe":
             self.model = GoogleNetPlaces205Caffe(model_path)
-        elif model_type == "googlenetcaffenikhil":
+        elif model_type == "vgg16caffe":
             layer_map = {"conv1_1": "features.0", "conv1_2": "features.2", "conv2_1": "features.5", "conv2_2": "features.7", "conv3_1": "features.10", "conv3_2": "features.12", "conv3_3": "features.14", "conv4_1": "features.17", "conv4_2": "features.19", "conv4_3": "features.21", "conv5_1": "features.24", "conv5_2": "features.26", "conv5_3": "features.28", "fc6": "classifier.0", "fc7": "classifier.3", "fc8": "classifier.6"}
             self.model = torchvision.models.vgg16(num_classes=205)
             s = torch.load(model_path)

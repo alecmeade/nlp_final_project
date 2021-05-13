@@ -17,7 +17,7 @@ DAVENET_PATH = "davenet_vgg16_MISA_1024_pretrained/"
 MODEL_TYPES = {
     "googlenet": GOOGLENET_PLACES205_PATH,
     "googlenetcaffe": CAFFE_GOOGLENET_PLACES205_PATH,
-    "googlenetcaffenikhil": NIKHIL_CAFFE_GOOGLENET_PLACES205_PATH
+    "vgg16caffe": NIKHIL_CAFFE_GOOGLENET_PLACES205_PATH
 }
 
 def main():
