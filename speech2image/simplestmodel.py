@@ -4,9 +4,8 @@ from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import wandb
-from vector_quantize_pytorch import VectorQuantize
 from .espnet_encoder import ESPnetEncoder
-from .networks import Encoder, SimplestGenerator, SimplestDiscriminator
+from .networks import SimplestGenerator, SimplestDiscriminator
 from .util import *
 
 
@@ -23,7 +22,6 @@ class Speech2Image(pl.LightningModule):
 
         self.latent_size = latent
         self.mean_path_length = 0
-        self.vq = VectorQuantize(dim=311, n_embed=8192, decay=0.1, commitment=1)
         self._init_networks(self.latent_size)
 
     def _init_networks(self, latent):
@@ -35,7 +33,6 @@ class Speech2Image(pl.LightningModule):
     def forward(self, x=None, nframes=None):
         x = self.enc(x)
         z = x.mean(dim=1)
-        # z = torch.cat([self.enc(x, nframes), torch.randn(1, self.latent_size//2, device=self.device)], dim=-1) if self.enc is not None else torch.randn(1, self.latent_size, device=self.device)
         return self.G(z)
 
 
@@ -48,9 +45,6 @@ class Speech2Image(pl.LightningModule):
 
         # Generate image
         x = self.enc(audio)
-        # _, l, _ = self.vq(x.permute(0, 2, 1))
-        # z = torch.cat([l, torch.randn(images.shape[0], self.latent_size//2, device=self.device)], dim=-1) if self.enc is not None else torch.randn(images.shape[0], self.latent_size, device=self.device)
-        # z = l.float().view(audio.shape[0], -1)
         z = x.mean(dim=1)
         fake_imgs = self.G(z)
         fake_pred = self.D(fake_imgs, z)
