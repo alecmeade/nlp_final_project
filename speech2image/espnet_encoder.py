@@ -44,7 +44,7 @@ class ESPnetEncoder(torch.nn.Module):
     def from_pretrained(model_name="Shinji Watanabe/librispeech_asr_train_asr_transformer_e18_raw_bpe_sp_valid.acc.best",
                             device="cuda",
                             dtype="float32"):
-        d = ModelDownloader()
+        d = ModelDownloader("~/.cache/espnet")
 
         model_params = d.download_and_unpack(model_name)
         
