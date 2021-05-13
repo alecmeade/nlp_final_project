@@ -1,0 +1,182 @@
+# Author: David Harwath
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+import numpy as np
+from . import quantizers
+        
+class Davenet(nn.Module):
+    def __init__(self, embedding_dim=1024):
+        super(Davenet, self).__init__()
+        self.embedding_dim = embedding_dim
+        self.batchnorm1 = nn.BatchNorm2d(1)
+        self.conv1 = nn.Conv2d(1, 128, kernel_size=(40,1), stride=(1,1), padding=(0,0))
+        self.conv2 = nn.Conv2d(128, 256, kernel_size=(1,11), stride=(1,1), padding=(0,5))
+        self.conv3 = nn.Conv2d(256, 512, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.conv4 = nn.Conv2d(512, 512, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.conv5 = nn.Conv2d(512, embedding_dim, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.pool = nn.MaxPool2d(kernel_size=(1,3), stride=(1,2),padding=(0,1))
+
+    def forward(self, x):
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+        x = self.batchnorm1(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.relu(self.conv4(x))
+        x = self.pool(x)
+        x = F.relu(self.conv5(x))
+        x = self.pool(x)
+        x = x.squeeze(2)
+        return x
+
+class DavenetPeakVQ(nn.Module):
+    def __init__(self, embedding_dim=1024, K=512, EMA=True, commitment_cost=0.25, thresh=0.1, sigma=0.5, halfwidth=11, normp=2):
+        super(DavenetPeakVQ, self).__init__()
+        self.embedding_dim = embedding_dim
+        self.batchnorm1 = nn.BatchNorm2d(1)
+        conv2_dim = 256
+        self.conv1 = nn.Conv2d(1, 128, kernel_size=(40,1), stride=(1,1), padding=(0,0))
+        self.conv2 = nn.Conv2d(128, conv2_dim, kernel_size=(1,11), stride=(1,1), padding=(0,5))
+        self.conv3 = nn.Conv2d(conv2_dim, 512, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.conv4 = nn.Conv2d(512, 512, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.conv5 = nn.Conv2d(512, embedding_dim, kernel_size=(1,17), stride=(1,1), padding=(0,8))
+        self.pool = nn.MaxPool2d(kernel_size=(1,3), stride=(1,2),padding=(0,1))
+        if EMA:
+            self.quantizer = quantizers.VectorQuantizerEMA(K, conv2_dim, commitment_cost, 0.99)
+        else:
+            self.quantizer = quantizers.VectorQuantizer(K, conv2_dim, commitment_cost)
+        self.quantizer_enabled = True
+        self.peakpick_enabled = True
+        self.peak_thresh = thresh
+        self.peak_sigma = sigma
+        self.peak_halfwidth = halfwidth
+        self.peak_normp = normp
+        self.dog = np.zeros(2*self.peak_halfwidth)
+        const = 1 / (-2 * self.peak_sigma **2)
+        for i in range(-1 * self.peak_halfwidth, self.peak_halfwidth):
+            self.dog[i + self.peak_halfwidth] = i * math.exp(const * i ** 2)
+        self.dog = np.flip(self.dog, 0)
+
+    def enable_quantizer(self):
+        self.quantizer_enabled = True
+
+    def disable_quantizer(self):
+        self.quantizer_enabled = False
+
+    def enable_pickpick(self):
+        self.peakpick_enabled = True
+
+    def disable_peakpick(self):
+        self.peakpick_enabled = False
+
+    def _DoG_peakfinder(self, x):
+        peaks = []
+        x_dog = np.convolve(self.dog, x, 'same')
+        minimum = 0
+        maximum = 0
+        last_val = 0
+        cross = 0
+        for i in range(len(x_dog)):
+            val = x_dog[i]
+            if last_val > 0 and val < 0:
+                cross = i 
+            if last_val < 0 and val > 0:
+                if maximum > 0 and (maximum - minimum) > self.peak_thresh:
+                    peaks.append(cross)
+                maximum = 0
+                minimum = 0
+            if val > maximum:
+                maximum = val
+            if val < minimum:
+                minimum = val
+            last_val = val
+        return peaks
+
+    def _get_peaks_for_one_utt(self, x):
+        assert(x.dim() == 3)
+        x = x.detach()
+        sumsignal = torch.norm(x, self.peak_normp, 0).squeeze().detach().cpu().numpy()
+        peakind = self._DoG_peakfinder(sumsignal)
+        peakind = [max(0, p) for p in peakind]
+        if len(peakind) > 0:
+            if peakind[0] == 0:
+                peakind.remove(0)
+        return peakind
+
+    def get_peaks(self, x):
+        x = self.batchnorm1(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        B = x.size(0)
+        peakind_list = []
+        peakvec_list = []
+        for b in range(B):
+            peakind = self._get_peaks_for_one_utt(x[b])
+            peakind_list.append(peakind)
+            peakvec = []
+            for p in peakind:
+                peakvec.append(x[b, :, :, p].squeeze().detach().cpu().numpy())
+            peakvec_list.append(peakvec)
+        assert(len(peakind_list) == B)
+        return peakind_list, peakvec_list
+
+    def init_vq(self, x):
+        if x.dim() == 3:	
+            x = x.unsqueeze(1)
+        N_frames = x.size(3)
+        x = self.batchnorm1(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        B = x.size(0)
+        N_peaks = quant_loss = perplexity = encodings = None
+        if self.peakpick_enabled:
+            x_ablated = torch.zeros_like(x)
+            N_peaks = x.new()
+            N_peaks.requires_grad = False
+            N_peaks.resize_(B).zero_()
+            for b in range(B):
+                peakind = self._get_peaks_for_one_utt(x[b])
+                # add just the frames from x[b] in peakind to x_ablated                                                                     
+                for peak in peakind:
+                    x_ablated[b, :, :, peak] = x[b, :, :, peak]
+                    N_peaks[b] += 1
+            x = x_ablated
+        else:
+            
+            
+    def forward(self, x):
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+        N_frames = x.size(3)
+        x = self.batchnorm1(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        B = x.size(0)
+        N_peaks = quant_loss = perplexity = encodings = None
+        if self.peakpick_enabled:
+            x_ablated = torch.zeros_like(x)
+            N_peaks = x.new()
+            N_peaks.requires_grad = False
+            N_peaks.resize_(B).zero_()
+            for b in range(B):
+                peakind = self._get_peaks_for_one_utt(x[b])
+                # add just the frames from x[b] in peakind to x_ablated
+                for peak in peakind:
+                    x_ablated[b, :, :, peak] = x[b, :, :, peak]
+                    N_peaks[b] += 1
+            x = x_ablated
+        if self.quantizer_enabled:
+            quant_loss, x, perplexity, encodings = self.quantizer(x)
+        x = self.pool(x)
+        x = F.relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.relu(self.conv4(x))
+        x = self.pool(x)
+        x = F.relu(self.conv5(x))
+        #print("Found an average of %d peaks per utterance" % peaks_per_utt)
+        return x, N_peaks, quant_loss, perplexity, encodings

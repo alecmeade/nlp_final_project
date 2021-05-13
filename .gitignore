@@ -24,3 +24,5 @@ output*/
 *.png
 *.webm
 *.wav
+*.zip
+eval_scprers/trained_models/
