@@ -1,4 +1,6 @@
 import os
+import copy
+import numpy
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -6,6 +8,7 @@ import pytorch_lightning as pl
 import wandb
 from .espnet_encoder import ESPnetEncoder
 from .networks import Encoder, Generator, Discriminator
+from .augment import augment, AdaptiveAugment
 from .util import *
 
 
@@ -25,6 +28,9 @@ PATH_REGULARIZE = 2
 CHANNEL_MULTIPLIER = 2
 LAMBDA = 100
 ACCUM = 0.5 ** (32 / (10 * 1000))
+ADA_INTERVAL = 4
+ADA_KIMG = 100
+ADA_TARGET = 0.6
 
 
 class Speech2Image(pl.LightningModule):
@@ -34,6 +40,9 @@ class Speech2Image(pl.LightningModule):
         self.latent_size = latent
         self.mean_path_length = 0
         self.s_flag = False
+        self.p = 0.0
+        self.rtstat = 0
+        self.aug = AdaptiveAugment(ADA_TARGET, ADA_KIMG, ADA_INTERVAL)
         self._init_networks(img_size, self.latent_size, n_mlp, pretrained)
 
     def _init_networks(self, img_size, latent, n_mlp, pretrained=None):
@@ -41,7 +50,7 @@ class Speech2Image(pl.LightningModule):
         self.enc.train()
         self.G = Generator(img_size, latent, n_mlp, channel_multiplier=CHANNEL_MULTIPLIER)
         self.D = Discriminator(img_size, channel_multiplier=CHANNEL_MULTIPLIER)
-        self.G_EMA = Generator(img_size, latent, n_mlp, channel_multiplier=CHANNEL_MULTIPLIER)
+        self.G_EMA = copy.deepcopy(self.G).eval()
         self.G.train()
         self.D.train()
         accumulate(self.G_EMA, self.G, 0)
@@ -71,32 +80,38 @@ class Speech2Image(pl.LightningModule):
 
         # Generate image
         x = self.enc(audio)
-        x.requires_grad_(True)
         z = x.mean(dim=1).view(1, audio.shape[0], -1)
         z = torch.cat([z, torch.randn(1, audio.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
         fake_imgs, _ = self.G(z, randomize_noise=False)
-        fake_pred = self.D(fake_imgs, z)
-        real_pred = self.D(images, z)
 
-        fake_imgs.requires_grad_(True)
+        rimgs = images.clone()
+        images, _ = augment(images, self.p)
+        fake_imgs, _ = augment(fake_imgs, self.p)
+
+        fake_pred = self.D(fake_imgs)
+        real_pred = self.D(images)
+        
+        self.p = self.aug.tune(real_pred)
+        self.rtstat = self.aug.r_t_stat
+
+        self.log("RT", self.rtstat, on_step=True, on_epoch=True, prog_bar=True)
 
         if d_step:
             d_loss = d_logistic_loss(real_pred, fake_pred)
             self.log("D", d_loss, on_step=True, on_epoch=True, prog_bar=True)
 
             if batch_idx % D_REG == 0:
-                images.requires_grad = True
-
+                rimgs.requires_grad = True
+                images, _ = augment(rimgs, self.p)
                 real_pred = self.D(images)
-                r1_loss = d_r1_loss(real_pred, images)
+                r1_loss = d_r1_loss(real_pred, rimgs)
                 self.log("D_R1", r1_loss, on_step=True, on_epoch=True, prog_bar=True)
 
-                self.D.zero_grad()
                 return d_loss + (R1 / 2 * r1_loss * D_REG + 0 * real_pred[0])
             return d_loss
         elif g_step or enc_step:
             fake_pred = self.D(fake_imgs)
-            g_loss = g_nonsaturating_loss(fake_pred) + F.l1_loss(fake_imgs, images)
+            g_loss = g_nonsaturating_loss(fake_pred)
             self.log("G", g_loss, on_step=True, on_epoch=True, prog_bar=True)
 
             if g_step and (batch_idx % G_REG == 0):

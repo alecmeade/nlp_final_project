@@ -25,9 +25,9 @@ def main():
         os.makedirs(folder)
 
     cuda = torch.cuda.is_available()
-    train_set = ImageCaptionDataset(args.dataset, audio_conf={"audio_type": "audio"})
+    train_set = ImageCaptionDataset(args.dataset, image_conf={"center_crop": True}, audio_conf={"audio_type": "audio"})
     train_dl = torch.utils.data.DataLoader(train_set, shuffle=True, num_workers=8, pin_memory=cuda, batch_size=args.batch_size)
-    val_set = ImageCaptionDataset(args.val, audio_conf={"audio_type": "audio"})
+    val_set = ImageCaptionDataset(args.val, image_conf={"center_crop": True}, audio_conf={"audio_type": "audio"})
     val_dl = torch.utils.data.DataLoader(val_set, shuffle=True, num_workers=8, pin_memory=cuda, batch_size=args.batch_size)
 
     # Main model

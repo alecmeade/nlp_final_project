@@ -1,7 +1,6 @@
-import os
 import math
 import random
-import argparse
+import re
 import numpy as np
 import torch
 from torch import nn, autograd, optim
@@ -96,3 +95,16 @@ def compute_gradient_penalty(D, real_samples, fake_samples, label, device):
     gradients = gradients.view(gradients.size(0), -1)
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
+
+
+def reduce_sum(tensor):
+    if not dist.is_available():
+        return tensor
+
+    if not dist.is_initialized():
+        return tensor
+
+    tensor = tensor.clone()
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+
+    return tensor

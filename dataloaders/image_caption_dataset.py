@@ -54,7 +54,7 @@ class ImageCaptionDataset(Dataset):
 
         if center_crop:
             self.image_resize_and_crop = transforms.Compose(
-                [transforms.Resize(img_size), transforms.CenterCrop(img_size), transforms.ToTensor()])
+                [transforms.RandomHorizontalFlip(), transforms.Resize(img_size), transforms.CenterCrop(img_size), transforms.ToTensor()])
         else:
             self.image_resize_and_crop = transforms.Compose(
                 [transforms.RandomResizedCrop(crop_size), transforms.ToTensor()])
