@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--audio_model", type=str, default=None, help="Path to the DaveNet audio model.")
     parser.add_argument("--image_model", type=str, default=None, help="Path to the DaveNet image model.")
     parser.add_argument("--outdir", type=str, default="./scores", help="Output dir for plots, reports, etc.")
+    parser.add_argument("--store_logits", action="store_true", help="Store classifier output logits.")
     parser.add_argument("--device", type=str, default="cuda", help="Either cuda or cpu.")
     args = parser.parse_args()
     
@@ -94,7 +95,9 @@ def main():
         uid = l["uttid"]
         scores[uid] = {}
         scores[uid]["y"] = get_idx(l["image"])
-        scores[uid]["y_pred"] = clf_scorer.score(lnet_img)
+        logits = clf_scorer.score(lnet_img)
+        scores[uid]["y_pred"] = logits.argmax(dim=1).item()
+        scores[uid]["logits"] = logits.squeeze().detach().cpu().numpy().tolist()
         scores[uid]["c"] = get_classname(scores[uid]["y"])
         scores[uid]["c_pred"] = get_classname(scores[uid]["y_pred"])
         scores[uid]["sisa"] = sisa
