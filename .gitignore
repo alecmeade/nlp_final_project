@@ -2,9 +2,11 @@ __pycache__
 .ipynb_checkpoints
 .vscode
 checkpoints_*
-data/PlacesAudioEnglish/
-*.cu
+data/Places*
+data/*.json
+data/*.sh
 *.tar.gz
+nohup*.out
 .DS_Store
 *.pth
 eval_scorers/trained_models/*

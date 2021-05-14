@@ -6,7 +6,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from speech2image.model import Speech2Image
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_gpus", type=int, default=1, help="How many GPUs to train with.")
