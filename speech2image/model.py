@@ -111,7 +111,7 @@ class Speech2Image(pl.LightningModule):
             return g_loss
 
     def configure_optimizers(self):
-        self.g_optim = optim.Adam(self.G.parameters(), lr=G_LR, betas=ADAM_BETAG)
+        self.g_optim = optim.Adam(list(self.G.parameters()) + list(self.enc.parameters()), lr=G_LR, betas=ADAM_BETAG)
         self.d_optim = optim.Adam(self.D.parameters(), lr=D_LR, betas=ADAM_BETAD)
         self.enc_optim = optim.Adam(self.enc.parameters(), lr=ENC_LR, betas=ADAM_BETAG)
         return [self.g_optim, self.d_optim, self.enc_optim], []
