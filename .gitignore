@@ -8,3 +8,4 @@ data/PlacesAudioEnglish/
 .DS_Store
 *.pth
 eval_scorers/trained_models/
+eval_scorers/results/
