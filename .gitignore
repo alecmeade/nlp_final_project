@@ -7,5 +7,5 @@ data/PlacesAudioEnglish/
 *.tar.gz
 .DS_Store
 *.pth
-eval_scorers/trained_models/
-eval_scorers/results/
+eval_scorers/trained_models/*
+eval_scorers/results/*
