@@ -4,8 +4,8 @@ from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import wandb
-from .espnet_encoder import ESPnetEncoder
-from .networks import Encoder, Generator, Discriminator
+from .text_encoder import TextEncoder
+from .networks import Generator, Discriminator
 from .util import *
 
 
@@ -27,7 +27,7 @@ LAMBDA = 100
 ACCUM = 0.5 ** (32 / (10 * 1000))
 
 
-class Speech2Image(pl.LightningModule):
+class Text2Image(pl.LightningModule):
     def __init__(self, img_size=256, latent=512, n_mlp=8, pretrained=None):
         super().__init__()
 
@@ -37,7 +37,7 @@ class Speech2Image(pl.LightningModule):
         self._init_networks(img_size, self.latent_size, n_mlp, pretrained)
 
     def _init_networks(self, img_size, latent, n_mlp, pretrained=None):
-        self.enc = ESPnetEncoder.from_pretrained()
+        self.enc = TextEncoder()
         self.enc.train()
         self.G = Generator(img_size, latent, n_mlp, channel_multiplier=CHANNEL_MULTIPLIER)
         self.D = Discriminator(img_size, channel_multiplier=CHANNEL_MULTIPLIER)
@@ -51,9 +51,9 @@ class Speech2Image(pl.LightningModule):
             self.G.load_state_dict(c["g"], strict=False)
             self.G_EMA.load_state_dict(c["g_ema"], strict=False)
 
-    def forward(self, x=None, nframes=None):
+    def forward(self, x=None):
         x = self.enc(x)
-        z = x.mean(dim=1).view(1, x.shape[0], -1)
+        z = x.view(1, x.shape[0], -1)
         z = torch.cat([z, torch.randn(1, x.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
         return self.G_EMA(z, randomize_noise=False)[0]
 
@@ -62,7 +62,7 @@ class Speech2Image(pl.LightningModule):
             accumulate(self.G_EMA, self.G, ACCUM)
         else:
             self.s_flag = True
-        images, audio, nframes, apath = batch
+        images, text = batch
 
         # Set up
         g_step = optimizer_idx == 0
@@ -70,10 +70,10 @@ class Speech2Image(pl.LightningModule):
         enc_step = optimizer_idx == 2
 
         # Generate image
-        x = self.enc(audio)
+        x = self.enc(text)
         x.requires_grad_(True)
-        z = x.mean(dim=1).view(1, audio.shape[0], -1)
-        z = torch.cat([z, torch.randn(1, audio.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
+        z = x.view(1, x.shape[0], -1)
+        z = torch.cat([z, torch.randn(1, x.shape[0], z.shape[-1], device=self.device)], dim=0).unbind(0)
         fake_imgs, _ = self.G(z, randomize_noise=False)
         fake_pred = self.D(fake_imgs, z)
         real_pred = self.D(images, z)
@@ -111,35 +111,35 @@ class Speech2Image(pl.LightningModule):
             return g_loss
 
     def configure_optimizers(self):
-        self.g_optim = optim.Adam(list(self.G.parameters()) + list(self.enc.parameters()), lr=G_LR, betas=ADAM_BETAG)
+        self.g_optim = optim.Adam(self.G.parameters(), lr=G_LR, betas=ADAM_BETAG)
         self.d_optim = optim.Adam(self.D.parameters(), lr=D_LR, betas=ADAM_BETAD)
         self.enc_optim = optim.Adam(self.enc.parameters(), lr=ENC_LR, betas=ADAM_BETAG)
         return [self.g_optim, self.d_optim, self.enc_optim], []
     
     def validation_step(self, batch, batch_idx):
-        images, audio, nframes, apath = batch
-        fake_imgs = self.forward(audio, nframes).cpu()
-        return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
+        images, text = batch
+        fake_imgs = self.forward(text).cpu()
+        return {"G_IMGs": fake_imgs, "I_TXTs": text, "R_IMGs": images.cpu()}
     
     def validation_epoch_end(self, outputs):
         if not len(outputs):
             return
         f_imgs = []
         r_imgs = []
-        i_auds = []
+        i_txts = []
         for output in outputs:
             f_imgs += [wandb.Image(x, caption="G_IMG %d" % i) for i, x in enumerate(output["G_IMGs"])]
             r_imgs += [wandb.Image(x, caption="R_IMG %d" % i) for i, x in enumerate(output["R_IMGs"])]
-            i_auds += [wandb.Audio(x, caption="I_AUD %d" % i) for i, x in enumerate(output["I_AUDs"])]
+            i_txts += [wandb.Html(x) for x in output["I_TXTs"]]
         
         self.logger.experiment.log({"G_IMG Val": f_imgs}, commit=False)
         self.logger.experiment.log({"R_IMG Val": r_imgs}, commit=False)
-        self.logger.experiment.log({"I_AUD Val": i_auds}, commit=False)
+        self.logger.experiment.log({"I_TXT Val": i_txts}, commit=False)
 
     def test_step(self, batch, batch_idx):
-        images, audio, nframes, apath = batch
-        fake_imgs = self.forward(audio, nframes).cpu()
-        return {"G_IMGs": fake_imgs, "I_AUDs": apath, "R_IMGs": images.cpu()}
+        images, text = batch
+        fake_imgs = self.forward(text).cpu()
+        return {"G_IMGs": fake_imgs, "I_TXTs": text, "R_IMGs": images.cpu()}
         
     def test_epoch_end(self, outputs):
         return outputs

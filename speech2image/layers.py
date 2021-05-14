@@ -2,9 +2,124 @@ import math
 import torch
 from torch import nn
 from torch.nn import functional as F
-
+from torch.nn.init import kaiming_normal_, calculate_gain
+from numpy import prod
 from .op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d, conv2d_gradfix
 
+
+class NormalizationLayer(nn.Module):
+
+    def __init__(self):
+        super(NormalizationLayer, self).__init__()
+
+    def forward(self, x, epsilon=1e-8):
+        return x * (((x**2).mean(dim=1, keepdim=True) + epsilon).rsqrt())
+
+
+def Upscale2d(x, factor=2):
+    assert isinstance(factor, int) and factor >= 1
+    if factor == 1:
+        return x
+    s = x.size()
+    x = x.view(-1, s[1], s[2], 1, s[3], 1)
+    x = x.expand(-1, s[1], s[2], factor, s[3], factor)
+    x = x.contiguous().view(-1, s[1], s[2] * factor, s[3] * factor)
+    return x
+
+
+def getLayerNormalizationFactor(x):
+    r"""
+    Get He's constant for the given layer
+    https://www.cv-foundation.org/openaccess/content_iccv_2015/papers/He_Delving_Deep_into_ICCV_2015_paper.pdf
+    """
+    size = x.weight.size()
+    fan_in = prod(size[1:])
+
+    return math.sqrt(2.0 / fan_in)
+
+
+class ConstrainedLayer(nn.Module):
+    r"""
+    A handy refactor that allows the user to:
+    - initialize one layer's bias to zero
+    - apply He's initialization at runtime
+    """
+
+    def __init__(self,
+                 module,
+                 equalized=True,
+                 lrMul=1.0,
+                 initBiasToZero=True):
+        r"""
+        equalized (bool): if true, the layer's weight should evolve within
+                         the range (-1, 1)
+        initBiasToZero (bool): if true, bias will be initialized to zero
+        """
+
+        super(ConstrainedLayer, self).__init__()
+
+        self.module = module
+        self.equalized = equalized
+
+        if initBiasToZero:
+            self.module.bias.data.fill_(0)
+        if self.equalized:
+            self.module.weight.data.normal_(0, 1)
+            self.module.weight.data /= lrMul
+            self.weight = getLayerNormalizationFactor(self.module) * lrMul
+
+    def forward(self, x):
+
+        x = self.module(x)
+        if self.equalized:
+            x *= self.weight
+        return x
+
+
+class EqualizedConv2d(ConstrainedLayer):
+
+    def __init__(self,
+                 nChannelsPrevious,
+                 nChannels,
+                 kernelSize,
+                 padding=0,
+                 bias=True,
+                 **kwargs):
+        r"""
+        A nn.Conv2d module with specific constraints
+        Args:
+            nChannelsPrevious (int): number of channels in the previous layer
+            nChannels (int): number of channels of the current layer
+            kernelSize (int): size of the convolutional kernel
+            padding (int): convolution's padding
+            bias (bool): with bias ?
+        """
+
+        ConstrainedLayer.__init__(self,
+                                  nn.Conv2d(nChannelsPrevious, nChannels,
+                                            kernelSize, padding=padding,
+                                            bias=bias),
+                                  **kwargs)
+
+
+class EqualizedLinear(ConstrainedLayer):
+
+    def __init__(self,
+                 nChannelsPrevious,
+                 nChannels,
+                 bias=True,
+                 **kwargs):
+        r"""
+        A nn.Linear module with specific constraints
+        Args:
+            nChannelsPrevious (int): number of channels in the previous layer
+            nChannels (int): number of channels of the current layer
+            bias (bool): with bias ?
+        """
+
+        ConstrainedLayer.__init__(self,
+                                  nn.Linear(nChannelsPrevious, nChannels,
+                                  bias=bias), **kwargs)
 
 class PixelNorm(nn.Module):
     def __init__(self):
@@ -447,3 +562,48 @@ class ResBlock(nn.Module):
         out = (out + skip) / math.sqrt(2)
 
         return out
+
+
+class PixelWiseNormLayer(nn.Module):
+    """PixelNorm layer. Implementation is from https://github.com/shanexn/pytorch-pggan."""
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x/torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + 1e-8)
+
+
+class MiniBatchAverageLayer(nn.Module):
+    """Minibatch stat concatenation layer. Implementation is from https://github.com/shanexn/pytorch-pggan."""
+    def __init__(self, offset=1e-8):
+        super().__init__()
+        self.offset = offset
+
+    def forward(self, x):
+        stddev = torch.sqrt(torch.mean((x - torch.mean(x, dim=0, keepdim=True))**2, dim=0, keepdim=True) + self.offset)
+        inject_shape = list(x.size())[:]
+        inject_shape[1] = 1
+        inject = torch.mean(stddev, dim=1, keepdim=True)
+        inject = inject.expand(inject_shape)
+        return torch.cat((x, inject), dim=1)
+
+
+class EqualizedLearningRateLayer(nn.Module):
+    """Applies equalized learning rate to the preceding layer. Implementation is from https://github.com/shanexn/pytorch-pggan."""
+    def __init__(self, layer):
+        super().__init__()
+        self.layer_ = layer
+
+        kaiming_normal_(self.layer_.weight, a=calculate_gain("conv2d"))
+        self.layer_norm_constant_ = (torch.mean(self.layer_.weight.data ** 2)) ** 0.5
+        self.layer_.weight.data.copy_(self.layer_.weight.data / self.layer_norm_constant_)
+
+        self.bias_ = self.layer_.bias if self.layer_.bias else None
+        self.layer_.bias = None
+
+    def forward(self, x):
+        self.layer_norm_constant_ = self.layer_norm_constant_.type(torch.Tensor)
+        x = self.layer_norm_constant_ * x
+        if self.bias_ is not None:
+            x += self.bias.view(1, self.bias.size()[0], 1, 1)
+        return x

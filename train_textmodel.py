@@ -3,13 +3,13 @@ import argparse
 import torch
 from pytorch_lightning import Trainer, loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
-from speech2image.model import Speech2Image
-from dataloaders.image_caption_dataset import ImageCaptionDataset
+from speech2image.textmodel import Text2Image
+from dataloaders.image_caption_text_dataset import ImageCaptionTextDataset
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_gpus", type=int, default=1, help="How many GPUs to train with.")
-    parser.add_argument("--checkpoints_dir", type=str, default="./checkpoints_speech2image", help="Model location.")
+    parser.add_argument("--checkpoints_dir", type=str, default="./checkpoints_text2image", help="Model location.")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size.")
     parser.add_argument("--dataset", type=str, default="./data/flickr_audio/samples.json", help="Dataset path.")
     parser.add_argument("--val", type=str, default=None, help="Dataset path.")
@@ -25,13 +25,13 @@ def main():
         os.makedirs(folder)
 
     cuda = torch.cuda.is_available()
-    train_set = ImageCaptionDataset(args.dataset, audio_conf={"audio_type": "audio"})
+    train_set = ImageCaptionTextDataset(args.dataset)
     train_dl = torch.utils.data.DataLoader(train_set, shuffle=True, num_workers=8, pin_memory=cuda, batch_size=args.batch_size)
-    val_set = ImageCaptionDataset(args.val, audio_conf={"audio_type": "audio"})
+    val_set = ImageCaptionTextDataset(args.val)
     val_dl = torch.utils.data.DataLoader(val_set, shuffle=True, num_workers=8, pin_memory=cuda, batch_size=args.batch_size)
 
     # Main model
-    model = Speech2Image(pretrained=args.pretrained)
+    model = Text2Image(pretrained=args.pretrained)
     if args.model:
         m = torch.load(args.model, map_location=model.device)
         model.load_state_dict(m["state_dict"])
