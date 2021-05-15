@@ -66,9 +66,12 @@ def main():
         l = data_key[wavpath[0][wavpath[0].find("wavs"):]]
         uid = l["uttid"]
         asr_text = l["asr_text"]
- 
+        
+        if uid != "A2WQT33K6LD9Z5-GSUN_3B1FB5BDCB2390BFB13047C583E9F82A":
+            continue
+            
         wav, _ = librosa.load(wavpath[0], args.sample_rate)
-        # play_audio(wav, args.sample_rate, 4)
+        
         heatmap, _, _, _, _ = dave_scorer.score(audio.squeeze(0), img.squeeze(0))
         N_t, N_r, N_c = heatmap.shape
 
@@ -106,8 +109,12 @@ def main():
         time_step = wav_duration / (N_t)
         max_val = np.max(matchmap)
 
+        # Play Audio While Plotting
+        play_audio(wav, args.sample_rate, 4, wait=False)
+
+        # Animate plot
         for i in range(0, (N_t - args.window_size)):
-            f, ax = plt.subplots(3, 1)
+            f, ax = plt.subplots(3, 1, figsize = (5, 10), gridspec_kw={'height_ratios': [2, 2, 1]})
             title = "\n".join(wrap("%s: %s" % (uid, asr_text), 40))
             f.suptitle(title)
             ax[0].imshow(img_t, aspect='auto')
@@ -123,6 +130,7 @@ def main():
             plt.savefig(args.outdir + "/%s_%d.jpg" % (uid, i))
             plt.close()
         
+        break
 
 if __name__ == "__main__":
     main()
