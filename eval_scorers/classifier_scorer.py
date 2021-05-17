@@ -32,4 +32,4 @@ class ClassifierScorer():
         if self.model is None:
             return None
 
-        return self.model(img).argmax(dim=1).item()
+        return self.model(img)

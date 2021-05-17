@@ -26,6 +26,8 @@ output*/
 *.wav
 *.zip
 eval_scprers/trained_models/
+scores/
+*.jpg
 *.tar.gz
 nohup*.out
 .DS_Store

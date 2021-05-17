@@ -54,7 +54,7 @@ class ImageCaptionDataset(Dataset):
 
         if center_crop:
             self.image_resize_and_crop = transforms.Compose(
-                [transforms.Resize(img_size), transforms.CenterCrop(img_size), transforms.ToTensor()])
+                [transforms.RandomHorizontalFlip(), transforms.Resize(img_size), transforms.CenterCrop(img_size), transforms.ToTensor()])
         else:
             self.image_resize_and_crop = transforms.Compose(
                 [transforms.RandomResizedCrop(crop_size), transforms.ToTensor()])
@@ -79,7 +79,7 @@ class ImageCaptionDataset(Dataset):
                 n_frames = y.shape[1]            
 
             return y, n_frames
-        elif audio_type not in ["melspectrogram", "spectrogram", "audio"]:
+        elif audio_type not in ["melspectrogram", "spectrogram", "audio", "both"]:
             raise ValueError('Invalid audio_type specified in audio_conf. Must be one of [melspectrogram, spectrogram]')
         preemph_coef = self.audio_conf.get('preemph_coef', 0.97)
         sample_rate = self.audio_conf.get('sample_rate', 16000)
@@ -106,18 +106,21 @@ class ImageCaptionDataset(Dataset):
             win_length=win_length,
             window=self.windows.get(window_type, self.windows['hamming']))
         spec = np.abs(stft)**2
-        if audio_type == 'melspectrogram':
+        if audio_type == "melspectrogram" or audio_type == "both":
             mel_basis = librosa.filters.mel(sr, n_fft, n_mels=num_mel_bins, fmin=fmin)
             melspec = np.dot(mel_basis, spec)
             logspec = librosa.power_to_db(melspec, ref=np.max)
         elif audio_type == 'spectrogram':
             logspec = librosa.power_to_db(spec, ref=np.max)
-        else:
+        
+        if audio_type == "audio" or audio_type == "both":
             length = sample_rate * 15
-            logspec = y[:length]
-            if len(logspec) < (length):
-                logspec = np.concatenate((logspec, np.ones(length - len(y)) * padval))
+            y = y[:length]
+            if len(y) < length:
+                y = np.concatenate((y, np.ones(length - len(y)) * padval))
             use_raw_length = True
+            if audio_type == "audio":
+                logspec = y
         n_frames = logspec.shape[1] if len(logspec.shape) > 1 else logspec.shape[0]
         if use_raw_length:
             target_length = n_frames
@@ -129,6 +132,9 @@ class ImageCaptionDataset(Dataset):
             logspec = logspec[:,0:p]
             n_frames = target_length
         logspec = torch.FloatTensor(logspec)
+
+        if audio_type == "both":
+            return (torch.FloatTensor(y), logspec), n_frames
         return logspec, n_frames
 
     def _LoadImage(self, impath):

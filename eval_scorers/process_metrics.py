@@ -49,15 +49,20 @@ def top_k_recall(y, logits, labels, k):
 	return recall_score(y, y_pred_top_k, labels=labels, average='micro')
 
 
+def our_top_k_accuracy(y, logits, k):
+	l = np.argsort(logits, axis=1)[:, ::-1][:, :k]
+	return (y[:, None] == l).max(axis=1).mean()
+
+
 def summarize_metrics(name, metrics_df, top_n = [1, 2, 3, 4, 5]):
 	summary = {'name': name}
 
-	logits = np.array([l for l in metrics_df.logits])
-	y = np.array([l for l in metrics_df.y])
-	y_pred = np.array([l for l in metrics_df.y_pred])
-	labels = list(range(0, 205))
+	logits = np.vstack(metrics_df.logits.values)
+	y = metrics_df.y.values
+	# y_pred = np.array([l for l in metrics_df.y_pred])
+	labels = np.arange(205)
 	for k in top_n:
-		summary['top_%d_accuracy' % k] = top_k_accuracy_score(y, logits, labels = labels, k=k)
+		summary['top_%d_accuracy' % k] = our_top_k_accuracy(y, logits, k=k)
 		
 		precision = top_k_precision(y, logits, labels, k)
 		summary['top_%d_precions' % k] = precision 
@@ -88,7 +93,7 @@ def print_summary(summary):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--metrics_base_dir", type=str, default='results')
-	parser.add_argument("--metric_file_names", type=list, default=['results.json'])
+	parser.add_argument("--metric_file_names", nargs="+", default=['results.json'])
 	
 	args = parser.parse_args()
 	metrics_dict = read_metric_files(args.metrics_base_dir, args.metric_file_names)
