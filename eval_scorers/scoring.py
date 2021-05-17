@@ -80,8 +80,12 @@ def main():
             c205_c2n[c] = n
             c205_n2c[n] = c
 
-    def get_idx(img_path):
-        return c205_c2n["/" + img_path[:img_path.rfind("/")]]
+    def get_idx(l):
+        img_path = l["image"]
+        try:
+            return c205_c2n["/" + img_path[:img_path.rfind("/")]]
+        except:
+            return c205_c2n[l["category"]]
     
     def get_classname(idx):
         return c205_n2c[idx]
@@ -91,10 +95,10 @@ def main():
     for img, audio, _, apath in tqdm(loader):
         heatmap, matches, sisa, misa, sima = dave_scorer.score(audio.squeeze(0), img.squeeze(0))
         lnet_img = lnet_img_transform(img)
-        l = data_key[apath[0][apath[0].find("wavs"):]]
+        l = data_key[apath[0][apath[0].find("wavs"):] if "wavs" in apath[0] else apath[0]]
         uid = l["uttid"]
         scores[uid] = {}
-        scores[uid]["y"] = get_idx(l["image"])
+        scores[uid]["y"] = get_idx(l)
         logits = clf_scorer.score(lnet_img)
         scores[uid]["y_pred"] = logits.argmax(dim=1).item()
         scores[uid]["logits"] = logits.squeeze().detach().cpu().numpy().tolist()
