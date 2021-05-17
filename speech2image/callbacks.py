@@ -12,10 +12,15 @@ class ImageWriterCallback(pl.callbacks.Callback):
         
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         for i in range(len(outputs["I_AUDs"])):
-            print("Writing %d." % i)
             a_name = os.path.basename(outputs["I_AUDs"][i])
             example_path = os.path.join(self.dir, os.path.splitext(a_name)[0])
             if not os.path.isdir(example_path):
+                os.makedirs(example_path)
+            else:
+                j = 1
+                while os.path.isdir("%s_%d" % (example_path, j)):
+                    j += 1
+                example_path = "%s_%d" % (example_path, j)
                 os.makedirs(example_path)
                 
             f_img = os.path.join(example_path, "f.png")

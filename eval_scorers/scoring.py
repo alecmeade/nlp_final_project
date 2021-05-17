@@ -97,6 +97,10 @@ def main():
         lnet_img = lnet_img_transform(img)
         l = data_key[apath[0][apath[0].find("wavs"):] if "wavs" in apath[0] else apath[0]]
         uid = l["uttid"]
+        i = ""
+        while (uid + str(i)) in scores:
+            i = i + 1 if i != "" else 1
+        uid = uid + str(i)
         scores[uid] = {}
         scores[uid]["y"] = get_idx(l)
         logits = clf_scorer.score(lnet_img)
