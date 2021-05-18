@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classes205", type=str, default=CLASSES_205_PATH, help="Path to category indices.")
     parser.add_argument("--model_dir", type=str, default="./eval_scorers/trained_models", help="Path to pretrained models.")
-    parser.add_argument("--model_type", type=str, default="googlenetcaffe", help="Path to pretrained models.")
+    parser.add_argument("--model_type", type=str, default="vgg16caffe", help="Path to pretrained models.")
     parser.add_argument("--model_path", type=str, default=None, help="Path to pretrained model.")
     parser.add_argument("--dataset", type=str, default="data/test_seen_2020.json", help="Path to the dataset.")
     parser.add_argument("--davenet_path", type=str, default=DAVENET_PATH, help="Path to DaveNet dir.")
@@ -57,8 +57,8 @@ def main():
         os.makedirs(args.outdir)
 
     # Load scorers
-    dave_scorer = DaveNetScorer(args.audio_model, args.image_model)
-    clf_scorer = ClassifierScorer(args.model_path, args.model_type)
+    dave_scorer = DaveNetScorer(args.audio_model, args.image_model).to(args.device)
+    clf_scorer = ClassifierScorer(args.model_path, args.model_type).to(args.device)
     
     # Dataset
     audio_conf = {"use_raw_length": True}
@@ -92,8 +92,10 @@ def main():
     
     # Score dataset
     scores = {}
-    for img, audio, _, apath in tqdm(loader):
-        heatmap, matches, sisa, misa, sima = dave_scorer.score(audio.squeeze(0), img.squeeze(0))
+    for j, (img, audio, _, apath) in tqdm(enumerate(loader)):
+        audio = audio.to(args.device)
+        img = img.to(args.device)
+        heatmap, matches, sisa, misa, sima = dave_scorer(audio.squeeze(0), img.squeeze(0))
         lnet_img = lnet_img_transform(img)
         l = data_key[apath[0][apath[0].find("wavs"):] if "wavs" in apath[0] else apath[0]]
         uid = l["uttid"]
@@ -103,7 +105,7 @@ def main():
         uid = uid + str(i)
         scores[uid] = {}
         scores[uid]["y"] = get_idx(l)
-        logits = clf_scorer.score(lnet_img)
+        logits = clf_scorer(lnet_img)
         scores[uid]["y_pred"] = logits.argmax(dim=1).item()
         scores[uid]["logits"] = logits.squeeze().detach().cpu().numpy().tolist()
         scores[uid]["c"] = get_classname(scores[uid]["y"])
@@ -111,9 +113,9 @@ def main():
         scores[uid]["sisa"] = sisa
         scores[uid]["misa"] = misa
         scores[uid]["sima"] = sima
-        
-        with open(os.path.join(args.outdir, "results.json"), "w") as json_file:
-            json.dump(scores, json_file, indent=4)
+    
+    with open(os.path.join(args.outdir, "results.json"), "w") as json_file:
+        json.dump(scores, json_file, indent=4)
 
 
 if __name__ == "__main__":

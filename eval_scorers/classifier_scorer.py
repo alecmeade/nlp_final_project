@@ -1,15 +1,13 @@
-import numpy as np
 import torch
-import torchvision.transforms as transforms
 import torchvision
 from dataloaders.image_caption_dataset import ImageCaptionDataset
 from .googlenet_places205 import GoogLeNetPlaces205
 from .googlenet_places205_caffe import GoogleNetPlaces205Caffe
 
 
-class ClassifierScorer():
+class ClassifierScorer(torch.nn.Module):
     def __init__(self, model_path, model_type="googlenet"):
-        self.model = None
+        super().__init__()
 
         if model_type == "googlenet":
             self.model = GoogLeNetPlaces205()
@@ -21,14 +19,14 @@ class ClassifierScorer():
             self.model = torchvision.models.vgg16(num_classes=205)
             s = torch.load(model_path)
             self.model.load_state_dict({self.replace(kn, layer_map):v for kn, v in s.items()})   
-
+        
         self.model.eval()
 
     def replace(self, key, mapping):
         k = key[:key.rfind(".")]
         return key.replace(k, mapping[k])
 
-    def score(self, img):
+    def forward(self, img):
         if self.model is None:
             return None
 
